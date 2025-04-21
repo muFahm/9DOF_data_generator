@@ -28,11 +28,7 @@ git clone https://github.com/muFahm/9DOF_data_generator.git
 cd sensor-data-generator
 ```
 
-Make sure Python 3.x is installed on your system. You can install any necessary dependencies with:
-
-```bash
-pip install -r requirements.txt
-```
+Make sure Python 3.x is installed on your system.
 
 Note: `Tkinter` comes pre-installed with Python, so no extra installation is required for the GUI.
 
