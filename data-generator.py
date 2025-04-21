@@ -15,6 +15,8 @@ class SensorSimulator:
         self.data_file = None
         self.update_callback = update_callback
         self.last_data = None
+        self.start_time = None
+        self.data_counter = 0
 
     def _generate_sensor_data(self):
         return {
@@ -57,12 +59,15 @@ class SensorSimulator:
             if not self.paused:
                 data = self._generate_sensor_data()
                 self._save_data_to_json(data)
-                self.update_callback(self.last_data, data)
+                self.data_counter += 1
+                self.update_callback(self.last_data, data, self.get_time_lapse(), self.data_counter)
                 self.last_data = data
             time.sleep(0.5)
 
     def start(self, file_path):
         self.data_file = file_path
+        self.start_time = time.time()  # Record start time
+        self.data_counter = 0  # Reset data counter
         if not self.running:
             self.running = True
             self.paused = False
@@ -79,9 +84,20 @@ class SensorSimulator:
         self.running = False
         self.paused = False
         self.last_data = None
+        self.data_file = None
+        self.start_time = None
+        self.data_counter = 0
         if self.thread:
             self.thread.join()
-        self.data_file = None
+
+    def get_time_lapse(self):
+        if not self.start_time:
+            return "0:00:00.000"
+        elapsed = time.time() - self.start_time
+        minutes, seconds = divmod(elapsed, 60)
+        hours, minutes = divmod(minutes, 60)
+        milliseconds = int((elapsed % 1) * 1000)
+        return f"{int(hours):02}:{int(minutes):02}:{int(seconds):02}.{milliseconds:03}"
 
 class SensorGUI:
     def __init__(self, root):
@@ -96,7 +112,7 @@ class SensorGUI:
         self.text_area = scrolledtext.ScrolledText(main_frame, width=60, height=15, state='disabled', wrap=tk.WORD)
         self.text_area.pack(side=tk.LEFT, padx=10)
 
-        # Frame kanan untuk tombol
+        # Frame kanan untuk tombol dan informasi tambahan
         button_frame = tk.Frame(main_frame)
         button_frame.pack(side=tk.RIGHT)
 
@@ -108,6 +124,13 @@ class SensorGUI:
 
         self.reset_button = tk.Button(button_frame, text="Reset", width=20, command=self.reset)
         self.reset_button.pack(pady=5)
+
+        # Informasi tambahan (Timelapse dan Data Generated)
+        self.timelapse_label = tk.Label(button_frame, text="Timelapse: 00:00:00.000", width=20)
+        self.timelapse_label.pack(pady=5)
+
+        self.data_generated_label = tk.Label(button_frame, text="Data Generated: 0", width=20)
+        self.data_generated_label.pack(pady=5)
 
         self.simulator = SensorSimulator(self.update_text_area)
 
@@ -121,7 +144,7 @@ class SensorGUI:
             f"Magnetometer:  x={data['magnetometer']['x']} y={data['magnetometer']['y']} z={data['magnetometer']['z']}"
         ]
 
-    def update_text_area(self, previous_data, new_data):
+    def update_text_area(self, previous_data, new_data, timelapse, data_count):
         output_lines = []
 
         output_lines.append("")  # Baris kosong
@@ -135,6 +158,10 @@ class SensorGUI:
         self.text_area.insert(tk.END, text_to_display + "\n\n")
         self.text_area.see(tk.END)
         self.text_area.config(state='disabled')
+
+        # Update Timelapse and Data Generated
+        self.timelapse_label.config(text=f"Timelapse: {timelapse}")
+        self.data_generated_label.config(text=f"Data Generated: {data_count}")
 
     def toggle_start(self):
         text = self.start_btn_text.get()
@@ -160,6 +187,8 @@ class SensorGUI:
         self.text_area.delete('1.0', tk.END)
         self.text_area.config(state='disabled')
         self.start_btn_text.set("Generate")
+        self.timelapse_label.config(text="Timelapse: 00:00:00.000")
+        self.data_generated_label.config(text="Data Generated: 0")
 
 if __name__ == "__main__":
     root = tk.Tk()
