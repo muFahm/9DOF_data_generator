@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import scrolledtext
+from tkinter import filedialog, scrolledtext
 import json
 import os
 import random
@@ -12,7 +12,7 @@ class SensorSimulator:
         self.running = False
         self.paused = False
         self.thread = None
-        self.data_file = "sensor_data.json"
+        self.data_file = None
         self.update_callback = update_callback
         self.last_data = None
 
@@ -37,6 +37,8 @@ class SensorSimulator:
         }
 
     def _save_data_to_json(self, data):
+        if not self.data_file:
+            return
         if not os.path.exists(self.data_file):
             with open(self.data_file, "w") as f:
                 json.dump([data], f, indent=4)
@@ -59,7 +61,8 @@ class SensorSimulator:
                 self.last_data = data
             time.sleep(0.5)
 
-    def start(self):
+    def start(self, file_path):
+        self.data_file = file_path
         if not self.running:
             self.running = True
             self.paused = False
@@ -72,11 +75,13 @@ class SensorSimulator:
     def continue_generate(self):
         self.paused = False
 
-    def stop(self):
+    def reset(self):
         self.running = False
         self.paused = False
+        self.last_data = None
         if self.thread:
             self.thread.join()
+        self.data_file = None
 
 class SensorGUI:
     def __init__(self, root):
@@ -101,8 +106,8 @@ class SensorGUI:
         self.start_button = tk.Button(button_frame, textvariable=self.start_btn_text, width=20, command=self.toggle_start)
         self.start_button.pack(pady=10)
 
-        self.stop_button = tk.Button(button_frame, text="Stop", width=20, command=self.stop)
-        self.stop_button.pack(pady=5)
+        self.reset_button = tk.Button(button_frame, text="Reset", width=20, command=self.reset)
+        self.reset_button.pack(pady=5)
 
         self.simulator = SensorSimulator(self.update_text_area)
 
@@ -119,12 +124,12 @@ class SensorGUI:
     def update_text_area(self, previous_data, new_data):
         output_lines = []
 
-        output_lines.append("")  # Line kosong
+        output_lines.append("")  # Baris kosong
         output_lines += self.format_sensor_output(previous_data)
         output_lines += self.format_sensor_output(new_data)
         output_lines.append("Generating data...")
 
-        text_to_display = "\n".join(output_lines[-7:])  # Hanya ambil 7 baris terakhir
+        text_to_display = "\n".join(output_lines[-7:])
 
         self.text_area.config(state='normal')
         self.text_area.insert(tk.END, text_to_display + "\n\n")
@@ -134,8 +139,14 @@ class SensorGUI:
     def toggle_start(self):
         text = self.start_btn_text.get()
         if text == "Generate":
-            self.simulator.start()
-            self.start_btn_text.set("Pause")
+            file_path = filedialog.asksaveasfilename(
+                defaultextension=".json",
+                filetypes=[("JSON files", "*.json")],
+                title="Save sensor data as..."
+            )
+            if file_path:
+                self.simulator.start(file_path)
+                self.start_btn_text.set("Pause")
         elif text == "Pause":
             self.simulator.pause()
             self.start_btn_text.set("Continue")
@@ -143,8 +154,11 @@ class SensorGUI:
             self.simulator.continue_generate()
             self.start_btn_text.set("Pause")
 
-    def stop(self):
-        self.simulator.stop()
+    def reset(self):
+        self.simulator.reset()
+        self.text_area.config(state='normal')
+        self.text_area.delete('1.0', tk.END)
+        self.text_area.config(state='disabled')
         self.start_btn_text.set("Generate")
 
 if __name__ == "__main__":
