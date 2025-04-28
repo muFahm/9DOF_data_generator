@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import filedialog, scrolledtext
+from tkinter import filedialog, scrolledtext, messagebox
 import json
 import os
 import random
@@ -13,6 +13,7 @@ class SensorSimulator:
         self.paused = False
         self.thread = None
         self.data_file = None
+        self.save_to_file = False  # Tambahan flag baru
         self.update_callback = update_callback
         self.last_data = None
         self.start_time = None
@@ -39,7 +40,7 @@ class SensorSimulator:
         }
 
     def _save_data_to_json(self, data):
-        if not self.data_file:
+        if not self.save_to_file or not self.data_file:
             return
         if not os.path.exists(self.data_file):
             with open(self.data_file, "w") as f:
@@ -64,10 +65,11 @@ class SensorSimulator:
                 self.last_data = data
             time.sleep(0.5)
 
-    def start(self, file_path):
+    def start(self, save_to_file=False, file_path=None):
+        self.save_to_file = save_to_file
         self.data_file = file_path
-        self.start_time = time.time()  # Record start time
-        self.data_counter = 0  # Reset data counter
+        self.start_time = time.time()
+        self.data_counter = 0
         if not self.running:
             self.running = True
             self.paused = False
@@ -87,6 +89,7 @@ class SensorSimulator:
         self.data_file = None
         self.start_time = None
         self.data_counter = 0
+        self.save_to_file = False
         if self.thread:
             self.thread.join()
 
@@ -104,15 +107,12 @@ class SensorGUI:
         self.root = root
         self.root.title("GY-91 Sensor Data Generator")
 
-        # Frame utama horizontal
         main_frame = tk.Frame(root)
         main_frame.pack(padx=10, pady=10)
 
-        # Area teks kiri
         self.text_area = scrolledtext.ScrolledText(main_frame, width=60, height=15, state='disabled', wrap=tk.WORD)
         self.text_area.pack(side=tk.LEFT, padx=10)
 
-        # Frame kanan untuk tombol dan informasi tambahan
         button_frame = tk.Frame(main_frame)
         button_frame.pack(side=tk.RIGHT)
 
@@ -125,12 +125,15 @@ class SensorGUI:
         self.reset_button = tk.Button(button_frame, text="Reset", width=20, command=self.reset)
         self.reset_button.pack(pady=5)
 
-        # Informasi tambahan (Timelapse dan Data Generated)
         self.timelapse_label = tk.Label(button_frame, text="Timelapse: 00:00:00.000", width=20)
         self.timelapse_label.pack(pady=5)
 
         self.data_generated_label = tk.Label(button_frame, text="Data Generated: 0", width=20)
         self.data_generated_label.pack(pady=5)
+
+        # Label tambahan untuk "Saved"
+        self.saved_label = tk.Label(button_frame, text="", width=20, fg="green")
+        self.saved_label.pack(pady=5)
 
         self.simulator = SensorSimulator(self.update_text_area)
 
@@ -147,7 +150,7 @@ class SensorGUI:
     def update_text_area(self, previous_data, new_data, timelapse, data_count):
         output_lines = []
 
-        output_lines.append("")  # Baris kosong
+        output_lines.append("")
         output_lines += self.format_sensor_output(previous_data)
         output_lines += self.format_sensor_output(new_data)
         output_lines.append("Generating data...")
@@ -159,20 +162,26 @@ class SensorGUI:
         self.text_area.see(tk.END)
         self.text_area.config(state='disabled')
 
-        # Update Timelapse and Data Generated
         self.timelapse_label.config(text=f"Timelapse: {timelapse}")
         self.data_generated_label.config(text=f"Data Generated: {data_count}")
 
     def toggle_start(self):
         text = self.start_btn_text.get()
         if text == "Generate":
-            file_path = filedialog.asksaveasfilename(
-                defaultextension=".json",
-                filetypes=[("JSON files", "*.json")],
-                title="Save sensor data as..."
-            )
-            if file_path:
-                self.simulator.start(file_path)
+            answer = messagebox.askyesno("Save JSON?", "Simpan data JSON?")
+            if answer:
+                file_path = filedialog.asksaveasfilename(
+                    defaultextension=".json",
+                    filetypes=[("JSON files", "*.json")],
+                    title="Save sensor data as..."
+                )
+                if file_path:
+                    self.simulator.start(save_to_file=True, file_path=file_path)
+                    self.saved_label.config(text="Saved")  # Munculkan label Saved
+                    self.start_btn_text.set("Pause")
+            else:
+                self.simulator.start(save_to_file=False)
+                self.saved_label.config(text="")  # Kosongkan label Saved
                 self.start_btn_text.set("Pause")
         elif text == "Pause":
             self.simulator.pause()
@@ -189,6 +198,7 @@ class SensorGUI:
         self.start_btn_text.set("Generate")
         self.timelapse_label.config(text="Timelapse: 00:00:00.000")
         self.data_generated_label.config(text="Data Generated: 0")
+        self.saved_label.config(text="")  # Reset label Saved juga
 
 if __name__ == "__main__":
     root = tk.Tk()
